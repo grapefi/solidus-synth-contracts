@@ -14,13 +14,13 @@ const func: DeployFunction = async ({deployments, getNamedAccounts, wellknown}) 
   const lp_xftm_eth = {address: (wellknown as any)[network.name].addresses.xTokenEth};
   const lp_fsm_eth = {address: (wellknown as any)[network.name].addresses.yTokenEth};
 
-  await deploy('FantasticChef', {
+  await deploy('SolidusChef', {
     from: deployer,
     log: true,
   });
 
   await execute(
-    'FantasticChef',
+    'SolidusChef',
     {from: deployer, log: true},
     'add',
     30000,
@@ -29,7 +29,7 @@ const func: DeployFunction = async ({deployments, getNamedAccounts, wellknown}) 
   );
 
   await execute(
-    'FantasticChef',
+    'SolidusChef',
     {from: deployer, log: true},
     'add',
     70000,

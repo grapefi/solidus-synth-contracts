@@ -1,4 +1,4 @@
-# Fantasm Finance contracts
+# Solidus Money contracts
 
-> Fractional-Algorithmic Synthetic Token pegged to the value of 1 FTM on Fantom Opera.
+> Fractional-Algorithmic Synthetic protocol.
 

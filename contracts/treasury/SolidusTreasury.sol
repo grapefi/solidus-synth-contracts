@@ -5,30 +5,30 @@ pragma solidity 0.8.4;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../interfaces/IFantasticStaking.sol";
+import "../interfaces/ISolidusStaking.sol";
 
-/*  FantasticTreasury.sol ============================================
-    The contract is to store the reserve of Fantastic Protocol
+/*  SolidusTreasury.sol ============================================
+    The contract is to store the reserve of the Solidus Protocol
     Contract will have a whitelist of strategy contracts which can request funding from Reserve
     These strategy contracts can be used to Allocate fee, Convert reserve to Protocol Owned Liquidity, Recollateralize, etc
 ==================================================================== */
-contract FantasticTreasury is Ownable {
+contract SolidusTreasury is Ownable {
     using SafeERC20 for IERC20;
     using Address for address;
 
     mapping(address => bool) public strategies;
     address[] public strategiesArray;
-    IFantasticStaking public staking;
+    ISolidusStaking public staking;
 
-    constructor(IFantasticStaking _staking) {
+    constructor(ISolidusStaking _staking) {
         staking = _staking;
     }
 
     // ========== PUBLIC VIEW FUNCTIONS ============
 
-    /// @notice Return ERC-20 balance of FantasticTreasury
+    /// @notice Return ERC-20 balance of SolidusTreasury
     /// @param _token Address of the ERC-20 token
-    /// @return Balance of the FantasticTreasury
+    /// @return Balance of the SolidusTreasury
     function balanceOf(address _token) public view returns (uint256) {
         return IERC20(_token).balanceOf(address(this));
     }
@@ -39,8 +39,8 @@ contract FantasticTreasury is Ownable {
     /// @param _token Address of the ERC-20 token
     /// @param _amount The requested amount
     function requestFund(address _token, uint256 _amount) external {
-        require(strategies[msg.sender], "FantasticTreasury::requestFund: Only strategies can request fund");
-        require(_amount <= balanceOf(_token), "FantasticTreasury::requestFund: Request more fund than balance");
+        require(strategies[msg.sender], "SolidusTreasury::requestFund: Only strategies can request fund");
+        require(_amount <= balanceOf(_token), "SolidusTreasury::requestFund: Request more fund than balance");
         IERC20(_token).safeIncreaseAllowance(msg.sender, _amount);
         emit FundRequested(msg.sender, _amount);
     }
@@ -48,8 +48,8 @@ contract FantasticTreasury is Ownable {
     /// @notice Add new strategy
     /// @param _strategy Address of the strategy contract
     function addStrategy(address _strategy) external onlyOwner {
-        require(_strategy != address(0), "FantasticTreasury::addStrategy: invalid address");
-        require(!strategies[_strategy], "FantasticTreasury::addStrategy: strategy was previously added");
+        require(_strategy != address(0), "SolidusTreasury::addStrategy: invalid address");
+        require(!strategies[_strategy], "SolidusTreasury::addStrategy: strategy was previously added");
         strategies[_strategy] = true;
         strategiesArray.push(_strategy);
         emit StrategyAdded(_strategy);
@@ -58,7 +58,7 @@ contract FantasticTreasury is Ownable {
     /// @notice Remove current strategy
     /// @param _strategy Address of the strategy contract
     function removeStrategy(address _strategy) external onlyOwner {
-        require(strategies[_strategy], "FantasticTreasury::removeStrategy: strategy not found");
+        require(strategies[_strategy], "SolidusTreasury::removeStrategy: strategy not found");
         delete strategies[_strategy];
 
         for (uint256 i = 0; i < strategiesArray.length; i++) {
@@ -75,8 +75,8 @@ contract FantasticTreasury is Ownable {
     /// @param _token Address of ERC-20 token
     /// @param _amount Amount of fee will be distributed
     function allocateFee(address _token, uint256 _amount) external onlyOwner {
-        require(address(staking) != address(0), "FantasticTreasury::allocateFee:Fee distributor not set");
-        require(_amount > 0, "FantasticTreasury::allocateFee: invalid amount");
+        require(address(staking) != address(0), "SolidusTreasury::allocateFee:Fee distributor not set");
+        require(_amount > 0, "SolidusTreasury::allocateFee: invalid amount");
         IERC20(_token).safeIncreaseAllowance(address(staking), _amount);
         staking.notifyRewardAmount(_token, _amount);
         emit TokenRewardAllocated(_token, _amount);

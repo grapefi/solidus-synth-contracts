@@ -13,12 +13,12 @@ const func: DeployFunction = async ({deployments, getNamedAccounts, wellknown}) 
 
   const weth = {address: (wellknown as any)[network.name].addresses.weth};
 
-  const farm = await get('FantasticChef');
+  const farm = await get('SolidusChef');
   const fsm = await get('FSM');
   const reserve = await get('FsmReserve');
   const wethUtils = await get('WethUtils');
 
-  const staking = await deploy('FantasticStaking', {
+  const staking = await deploy('SolidusStaking', {
     from: deployer,
     log: true,
     args: [fsm.address, reserve.address, [farm.address]],
@@ -27,16 +27,16 @@ const func: DeployFunction = async ({deployments, getNamedAccounts, wellknown}) 
     },
   });
 
-  await execute('FantasticChef', {from: deployer, log: true}, 'setRewardMinter', staking.address);
+  await execute('SolidusChef', {from: deployer, log: true}, 'setRewardMinter', staking.address);
 
-  const treasury = await deploy('FantasticTreasury', {
+  const treasury = await deploy('SolidusTreasury', {
     from: deployer,
     log: true,
     args: [staking.address],
   });
 
   await execute(
-    'FantasticStaking',
+    'SolidusStaking',
     {from: deployer, log: true},
     'addReward',
     weth.address,

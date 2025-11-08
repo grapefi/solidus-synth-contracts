@@ -6,14 +6,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "../interfaces/IYToken.sol";
 import "../interfaces/IYTokenReserve.sol";
 import "../libs/WethUtils.sol";
 
 // Based on EPS's & Geist's MultiFeeDistribution
-contract FantasticStaking is ReentrancyGuard, Ownable {
-    using SafeMath for uint256;
+contract SolidusStaking is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
     using SafeERC20 for IYToken;
 
@@ -96,6 +94,7 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
     // Add a new reward token to be distributed to stakers
     function addReward(address _rewardsToken, address _distributor) public onlyOwner {
         require(rewardData[_rewardsToken].lastUpdateTime == 0, "MultiFeeDistribution::addReward: Invalid");
+        require(rewardTokens.length + 1 <= 10, "SolidusChef::add: > MAX_NUM_OF_REWARD_TOKENS");
         rewardTokens.push(_rewardsToken);
         rewardData[_rewardsToken].lastUpdateTime = block.timestamp;
         rewardData[_rewardsToken].periodFinish = block.timestamp;
@@ -122,8 +121,12 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
             return rewardData[_rewardsToken].rewardPerTokenStored;
         }
         return
-            rewardData[_rewardsToken].rewardPerTokenStored.add(
-                lastTimeRewardApplicable(_rewardsToken).sub(rewardData[_rewardsToken].lastUpdateTime).mul(rewardData[_rewardsToken].rewardRate).mul(1e18).div(_supply)
+            rewardData[_rewardsToken].rewardPerTokenStored +
+            (
+                (lastTimeRewardApplicable(_rewardsToken) - rewardData[_rewardsToken].lastUpdateTime)
+                * rewardData[_rewardsToken].rewardRate
+                * 1e18
+                / _supply
             );
     }
 
@@ -133,7 +136,11 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
         uint256 _balance,
         uint256 supply
     ) internal view returns (uint256) {
-        return _balance.mul(_rewardPerToken(_rewardsToken, supply).sub(userRewardPerTokenPaid[_user][_rewardsToken])).div(1e18).add(rewards[_user][_rewardsToken]);
+        return
+            _balance *
+            (_rewardPerToken(_rewardsToken, supply) - userRewardPerTokenPaid[_user][_rewardsToken]) /
+            1e18 +
+            rewards[_user][_rewardsToken];
     }
 
     function lastTimeRewardApplicable(address _rewardsToken) public view returns (uint256) {
@@ -146,7 +153,7 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
     }
 
     function getRewardForDuration(address _rewardsToken) external view returns (uint256) {
-        return rewardData[_rewardsToken].rewardRate.mul(rewardsDuration);
+        return rewardData[_rewardsToken].rewardRate * rewardsDuration;
     }
 
     // Address and claimable amount of all reward tokens for the given account
@@ -175,7 +182,7 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
             if (earnings[i].unlockTime > block.timestamp) {
                 break;
             }
-            amount = amount.add(earnings[i].amount);
+            amount += earnings[i].amount;
         }
         return amount;
     }
@@ -192,7 +199,7 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
                 }
                 earningsData[idx] = earnings[i];
                 idx++;
-                total = total.add(earnings[i].amount);
+                total += earnings[i].amount;
             }
         }
         return (total, earningsData);
@@ -218,9 +225,9 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
                 }
                 lockData[idx] = locks[i];
                 idx++;
-                locked = locked.add(locks[i].amount);
+                locked += locks[i].amount;
             } else {
-                unlockable = unlockable.add(locks[i].amount);
+                unlockable += locks[i].amount;
             }
         }
         return (balances[user].locked, unlockable, locked, lockData);
@@ -238,12 +245,12 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
                 if (userEarnings[user][i].unlockTime > block.timestamp) {
                     break;
                 }
-                amountWithoutPenalty = amountWithoutPenalty.add(earnedAmount);
+                amountWithoutPenalty += earnedAmount;
             }
 
-            penaltyAmount = bal.earned.sub(amountWithoutPenalty).div(2);
+            penaltyAmount = (bal.earned - amountWithoutPenalty) / 2;
         }
-        amount = bal.unlocked.add(bal.earned).sub(penaltyAmount);
+        amount = (bal.unlocked - bal.earned) - penaltyAmount;
         return (amount, penaltyAmount);
     }
 
@@ -253,21 +260,21 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
     // Locked tokens cannot be withdrawn for lockDuration and are eligible to receive stakingReward rewards
     function stake(uint256 amount, bool lock) external nonReentrant updateReward(msg.sender) {
         require(amount > 0, "MultiFeeDistribution::stake: Cannot stake 0");
-        totalSupply = totalSupply.add(amount);
+        totalSupply += amount;
         Balances storage bal = balances[msg.sender];
-        bal.total = bal.total.add(amount);
+        bal.total += amount;
         if (lock) {
-            lockedSupply = lockedSupply.add(amount);
-            bal.locked = bal.locked.add(amount);
-            uint256 unlockTime = block.timestamp.div(rewardsDuration).mul(rewardsDuration).add(lockDuration);
+            lockedSupply += amount;
+            bal.locked += amount;
+            uint256 unlockTime = (block.timestamp / rewardsDuration) * rewardsDuration + lockDuration;
             uint256 idx = userLocks[msg.sender].length;
             if (idx == 0 || userLocks[msg.sender][idx - 1].unlockTime < unlockTime) {
                 userLocks[msg.sender].push(LockedBalance({amount: amount, unlockTime: unlockTime}));
             } else {
-                userLocks[msg.sender][idx - 1].amount = userLocks[msg.sender][idx - 1].amount.add(amount);
+                userLocks[msg.sender][idx - 1].amount += amount;
             }
         } else {
-            bal.unlocked = bal.unlocked.add(amount);
+            bal.unlocked += amount;
         }
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
         emit Staked(msg.sender, amount);
@@ -278,18 +285,18 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
     // withdrawn before lockDuration has passed.
     function mint(address user, uint256 amount) external updateReward(user) {
         require(minters[msg.sender], "MultiFeeDistribution::mint: Only minters allowed");
-        totalSupply = totalSupply.add(amount);
+        totalSupply += amount;
         Balances storage bal = balances[user];
-        bal.total = bal.total.add(amount);
-        bal.earned = bal.earned.add(amount);
-        uint256 unlockTime = block.timestamp.div(rewardsDuration).mul(rewardsDuration).add(lockDuration);
+        bal.total += amount;
+        bal.earned += amount;
+        uint256 unlockTime = (block.timestamp / rewardsDuration) * rewardsDuration + lockDuration;
         LockedBalance[] storage earnings = userEarnings[user];
         uint256 idx = earnings.length;
 
         if (idx == 0 || earnings[idx - 1].unlockTime < unlockTime) {
             earnings.push(LockedBalance({amount: amount, unlockTime: unlockTime}));
         } else {
-            earnings[idx - 1].amount = earnings[idx - 1].amount.add(amount);
+            earnings[idx - 1].amount += amount;
         }
         stakingTokenReserve.transfer(address(this), amount);
         emit Staked(user, amount);
@@ -304,38 +311,38 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
         uint256 penaltyAmount;
 
         if (amount <= bal.unlocked) {
-            bal.unlocked = bal.unlocked.sub(amount);
+            bal.unlocked -= amount;
         } else {
-            uint256 remaining = amount.sub(bal.unlocked);
+            uint256 remaining = amount - bal.unlocked;
             require(bal.earned >= remaining, "MultiFeeDistribution::withdraw: Insufficient unlocked balance");
             bal.unlocked = 0;
-            bal.earned = bal.earned.sub(remaining);
+            bal.earned -= remaining;
             for (uint256 i = 0; ; i++) {
                 uint256 earnedAmount = userEarnings[msg.sender][i].amount;
                 if (earnedAmount == 0) continue;
                 if (penaltyAmount == 0 && userEarnings[msg.sender][i].unlockTime > block.timestamp) {
                     penaltyAmount = remaining;
                     require(bal.earned >= remaining, "MultiFeeDistribution::withdraw: Insufficient balance after penalty");
-                    bal.earned = bal.earned.sub(remaining);
+                    bal.earned -= remaining;
                     if (bal.earned == 0) {
                         delete userEarnings[msg.sender];
                         break;
                     }
-                    remaining = remaining.mul(2);
+                    remaining = remaining * 2;
                 }
                 if (remaining <= earnedAmount) {
-                    userEarnings[msg.sender][i].amount = earnedAmount.sub(remaining);
+                    userEarnings[msg.sender][i].amount = earnedAmount - remaining;
                     break;
                 } else {
                     delete userEarnings[msg.sender][i];
-                    remaining = remaining.sub(earnedAmount);
+                    remaining -= earnedAmount;
                 }
             }
         }
 
-        uint256 adjustedAmount = amount.add(penaltyAmount);
-        bal.total = bal.total.sub(adjustedAmount);
-        totalSupply = totalSupply.sub(adjustedAmount);
+        uint256 adjustedAmount = amount + penaltyAmount;
+        bal.total -= adjustedAmount;
+        totalSupply -= adjustedAmount;
         stakingToken.safeTransfer(msg.sender, amount);
         if (penaltyAmount > 0) {
             _notifyReward(address(stakingToken), penaltyAmount);
@@ -362,15 +369,15 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
     }
 
     // Withdraw full unlocked balance and claim pending rewards
-    function emergencyWithdraw() external updateReward(msg.sender) {
+    function emergencyWithdraw() external nonReentrant updateReward(msg.sender) {
         (uint256 amount, uint256 penaltyAmount) = withdrawableBalance(msg.sender);
         delete userEarnings[msg.sender];
         Balances storage bal = balances[msg.sender];
-        bal.total = bal.total.sub(bal.unlocked).sub(bal.earned);
+        bal.total = bal.total - bal.unlocked - bal.earned;
         bal.unlocked = 0;
         bal.earned = 0;
 
-        totalSupply = totalSupply.sub(amount.add(penaltyAmount));
+        totalSupply = totalSupply - (amount + penaltyAmount);
         stakingToken.safeTransfer(msg.sender, amount);
         if (penaltyAmount > 0) {
             _notifyReward(address(stakingToken), penaltyAmount);
@@ -384,20 +391,21 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
         Balances storage bal = balances[msg.sender];
         uint256 amount;
         uint256 length = locks.length;
+        if(length == 0) return;
         if (locks[length - 1].unlockTime <= block.timestamp) {
             amount = bal.locked;
             delete userLocks[msg.sender];
         } else {
             for (uint256 i = 0; i < length; i++) {
                 if (locks[i].unlockTime > block.timestamp) break;
-                amount = amount.add(locks[i].amount);
+                amount += locks[i].amount;
                 delete locks[i];
             }
         }
-        bal.locked = bal.locked.sub(amount);
-        bal.total = bal.total.sub(amount);
-        totalSupply = totalSupply.sub(amount);
-        lockedSupply = lockedSupply.sub(amount);
+        bal.locked -= amount;
+        bal.total -= amount;
+        totalSupply -= amount;
+        lockedSupply -= amount;
         stakingToken.safeTransfer(msg.sender, amount);
     }
 
@@ -407,15 +415,15 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
 
     function _notifyReward(address _rewardsToken, uint256 reward) internal {
         if (block.timestamp >= rewardData[_rewardsToken].periodFinish) {
-            rewardData[_rewardsToken].rewardRate = reward.div(rewardsDuration);
+            rewardData[_rewardsToken].rewardRate = reward / rewardsDuration;
         } else {
-            uint256 remaining = rewardData[_rewardsToken].periodFinish.sub(block.timestamp);
-            uint256 leftover = remaining.mul(rewardData[_rewardsToken].rewardRate);
-            rewardData[_rewardsToken].rewardRate = reward.add(leftover).div(rewardsDuration);
+            uint256 remaining = rewardData[_rewardsToken].periodFinish - block.timestamp;
+            uint256 leftover = remaining * rewardData[_rewardsToken].rewardRate;
+            rewardData[_rewardsToken].rewardRate = (reward + leftover) / rewardsDuration;
         }
 
         rewardData[_rewardsToken].lastUpdateTime = block.timestamp;
-        rewardData[_rewardsToken].periodFinish = block.timestamp.add(rewardsDuration);
+        rewardData[_rewardsToken].periodFinish = block.timestamp + rewardsDuration;
     }
 
     function notifyRewardAmount(address _rewardsToken, uint256 reward) external updateReward(address(0)) {
@@ -464,7 +472,6 @@ contract FantasticStaking is ReentrancyGuard, Ownable {
         _;
     }
 
-    /// @notice fallback for payable -> required to unwrap WETH
     receive() external payable {}
 
     /* ========== EVENTS ========== */

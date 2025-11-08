@@ -5,10 +5,10 @@ pragma solidity 0.8.4;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../interfaces/IFantasticStaking.sol";
+import "../interfaces/ISolidusStaking.sol";
 import "../interfaces/IRewarder.sol";
 
-contract FantasticChef is Ownable {
+contract SolidusChef is Ownable {
     using SafeERC20 for IERC20;
 
     struct UserInfo {
@@ -22,7 +22,7 @@ contract FantasticChef is Ownable {
         uint256 allocPoint;
     }
 
-    IFantasticStaking public rewardMinter;
+    ISolidusStaking public rewardMinter;
 
     /// @notice Info of each MCV2 pool.
     PoolInfo[] public poolInfo;
@@ -113,7 +113,10 @@ contract FantasticChef is Ownable {
             _rewarder.onReward(pid, to, to, 0, user.amount);
         }
 
+        uint256 beforeBal = lpToken[pid].balanceOf(address(this));
         lpToken[pid].safeTransferFrom(msg.sender, address(this), amount);
+        uint256 beforeAfter = lpToken[pid].balanceOf(address(this)) - beforeBal;
+        require(beforeAfter == amount, "Token amount received invalid");
 
         emit Deposit(msg.sender, pid, amount, to);
     }
@@ -185,6 +188,7 @@ contract FantasticChef is Ownable {
         uint256 _pendingReward = uint256(accumulatedReward - user.rewardDebt);
 
         // Effects
+        require(amount <= user.amount, 'Withdraw request greater than staked amount');
         user.rewardDebt = accumulatedReward - int256((amount * pool.accRewardPerShare) / ACC_REWARD_PRECISION);
         user.amount -= amount;
 
@@ -251,6 +255,7 @@ contract FantasticChef is Ownable {
         IERC20 _lpToken,
         IRewarder _rewarder
     ) public onlyOwner {
+        require(poolInfo.length + 1 <= MAX_NUM_OF_POOLS, "SolidusChef::add: > MAX_NUM_OF_POOLS");
         checkPoolDuplicate(_lpToken);
         massUpdatePools();
         totalAllocPoint += allocPoint;
@@ -258,7 +263,6 @@ contract FantasticChef is Ownable {
         rewarder.push(_rewarder);
 
         poolInfo.push(PoolInfo({allocPoint: allocPoint, lastRewardTime: block.timestamp, accRewardPerShare: 0}));
-        require(poolInfo.length <= MAX_NUM_OF_POOLS, "FantasticChef::add: > MAX_NUM_OF_POOLS");
         emit LogPoolAddition(lpToken.length - 1, allocPoint, _lpToken, _rewarder);
     }
 
@@ -285,7 +289,7 @@ contract FantasticChef is Ownable {
     /// @notice Sets the reward per second to be distributed. Can only be called by the owner.
     /// @param _rewardPerSecond The amount of reward to be distributed per second.
     function setRewardPerSecond(uint256 _rewardPerSecond) public onlyOwner {
-        require(_rewardPerSecond <= MAX_REWARD_PER_SECOND, "FantasticChef::setRewardPerSecond: > MAX_REWARD_PER_SECOND");
+        require(_rewardPerSecond <= MAX_REWARD_PER_SECOND, "SolidusChef::setRewardPerSecond: > MAX_REWARD_PER_SECOND");
         massUpdatePools();
         rewardPerSecond = _rewardPerSecond;
         emit LogRewardPerSecond(_rewardPerSecond);
@@ -293,8 +297,8 @@ contract FantasticChef is Ownable {
 
     /// @notice Set the address of rewardMinter.  Can only be called ONCE by the owner.
     /// @param _rewardMinter Address of MultiFeeDistribution contract
-    function setRewardMinter(IFantasticStaking _rewardMinter) external {
-        require(address(rewardMinter) == address(0), "FantasticChef::setRewardMinter: Cannot redefine rewardMinter");
+    function setRewardMinter(ISolidusStaking _rewardMinter) external onlyOwner {
+        require(address(rewardMinter) != address(0), "SolidusChef::setRewardMinter: Cannot be null");
         rewardMinter = _rewardMinter;
     }
 

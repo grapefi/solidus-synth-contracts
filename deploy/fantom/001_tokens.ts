@@ -4,11 +4,11 @@ const func: DeployFunction = async ({deployments, getNamedAccounts}) => {
   const {deploy, execute} = deployments;
   const {deployer} = await getNamedAccounts();
 
-  await deploy('XFTM', {
-    contract: 'XFTM',
+  await deploy('xsAVAX', {
+    contract: 'xsAVAX',
     from: deployer,
     log: true,
-    args: ['Fantastic Protocol XFTM Token', 'XFTM'],
+    args: ['Solidus Money Synth Avax', 'xsAVAX'],
   });
 
   const reserve = await deploy('FsmReserve', {
@@ -35,13 +35,13 @@ const func: DeployFunction = async ({deployments, getNamedAccounts}) => {
     args: [],
   });
 
-  const fsm = await deploy('FSM', {
-    contract: 'FSM',
+  const fsm = await deploy('SM', {
+    contract: 'SM',
     from: deployer,
     log: true,
     args: [
-      'Fantastic Protocol FSM Token',
-      'FSM',
+      'Solidus Money Share Token',
+      'SM',
       daoFund.address,
       devFund.address,
       treasuryFund.address,

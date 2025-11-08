@@ -15,7 +15,7 @@ const func: DeployFunction = async ({deployments, getNamedAccounts, wellknown}) 
   const lp_fsm_eth = {address: (wellknown as any)[network.name].addresses.yTokenEth};
 
   const fsm = await get('FSM');
-  const treasury = await get('FantasticTreasury');
+  const treasury = await get('SolidusTreasury');
   const wethUtils = await get('WethUtils');
 
   const swapSlippage = 20000; // 2%
