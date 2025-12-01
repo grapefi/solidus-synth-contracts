@@ -94,7 +94,7 @@ contract SolidusStaking is ReentrancyGuard, Ownable {
     // Add a new reward token to be distributed to stakers
     function addReward(address _rewardsToken, address _distributor) public onlyOwner {
         require(rewardData[_rewardsToken].lastUpdateTime == 0, "MultiFeeDistribution::addReward: Invalid");
-        require(rewardTokens.length + 1 <= 10, "SolidusChef::add: > MAX_NUM_OF_REWARD_TOKENS");
+        require(rewardTokens.length <= 10, "SolidusChef::add: > Max Reward Tokens Added");
         rewardTokens.push(_rewardsToken);
         rewardData[_rewardsToken].lastUpdateTime = block.timestamp;
         rewardData[_rewardsToken].periodFinish = block.timestamp;
@@ -283,7 +283,7 @@ contract SolidusStaking is ReentrancyGuard, Ownable {
     // Mint new tokens
     // Minted tokens receive rewards normally but incur a 50% penalty when
     // withdrawn before lockDuration has passed.
-    function mint(address user, uint256 amount) external updateReward(user) {
+    function mint(address user, uint256 amount) external nonReentrant updateReward(user) {
         require(minters[msg.sender], "MultiFeeDistribution::mint: Only minters allowed");
         totalSupply += amount;
         Balances storage bal = balances[user];
@@ -347,7 +347,7 @@ contract SolidusStaking is ReentrancyGuard, Ownable {
         if (penaltyAmount > 0) {
             _notifyReward(address(stakingToken), penaltyAmount);
         }
-        emit Withdrawn(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount, penaltyAmount);
     }
 
     // Claim all pending staking rewards
@@ -386,7 +386,7 @@ contract SolidusStaking is ReentrancyGuard, Ownable {
     }
 
     // Withdraw all currently locked tokens where the unlock time has passed
-    function withdrawExpiredLocks() external {
+    function withdrawExpiredLocks() external nonReentrant {
         LockedBalance[] storage locks = userLocks[msg.sender];
         Balances storage bal = balances[msg.sender];
         uint256 amount;
@@ -480,7 +480,7 @@ contract SolidusStaking is ReentrancyGuard, Ownable {
     event RewardTokenAdded(address indexed rewardTokenAddress);
     event RewardDistributorApproved(address indexed rewardAddress, address indexed distributor, bool approved);
     event Staked(address indexed user, uint256 amount);
-    event Withdrawn(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount, uint256 penaltyAmount);
     event RewardPaid(address indexed user, address indexed rewardsToken, uint256 reward);
     event Recovered(address token, uint256 amount);
 }

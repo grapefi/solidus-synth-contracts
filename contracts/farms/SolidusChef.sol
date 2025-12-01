@@ -115,8 +115,8 @@ contract SolidusChef is Ownable {
 
         uint256 beforeBal = lpToken[pid].balanceOf(address(this));
         lpToken[pid].safeTransferFrom(msg.sender, address(this), amount);
-        uint256 beforeAfter = lpToken[pid].balanceOf(address(this)) - beforeBal;
-        require(beforeAfter == amount, "Token amount received invalid");
+        uint256 received = lpToken[pid].balanceOf(address(this)) - beforeBal;
+        require(received == amount, "Unexpected Token Amount");
 
         emit Deposit(msg.sender, pid, amount, to);
     }
@@ -143,7 +143,10 @@ contract SolidusChef is Ownable {
             _rewarder.onReward(pid, msg.sender, to, 0, user.amount);
         }
 
+        uint256 beforeBal = lpToken[pid].balanceOf(address(this));
         lpToken[pid].safeTransfer(to, amount);
+        uint256 received = lpToken[pid].balanceOf(address(this)) - beforeBal;
+        require(received == amount, "Unexpected Token Amount");
 
         emit Withdraw(msg.sender, pid, amount, to);
     }
@@ -162,6 +165,8 @@ contract SolidusChef is Ownable {
 
         // Interactions
         if (_pendingReward != 0) {
+            uint256 poolLength = poolLength();
+            require(_pendingReward <= MAX_REWARD_PER_SECOND * poolLength * 1 weeks, 'Cannot mint more than max tokens per epoch');
             rewardMinter.mint(to, _pendingReward);
         }
 
@@ -194,6 +199,8 @@ contract SolidusChef is Ownable {
 
         // Interactions
         if (_pendingReward != 0) {
+            uint256 poolLength = poolLength();
+            require(_pendingReward <= MAX_REWARD_PER_SECOND * poolLength * 1 weeks, 'Cannot mint more than max tokens per epoch');
             rewardMinter.mint(to, _pendingReward);
         }
 
@@ -255,7 +262,7 @@ contract SolidusChef is Ownable {
         IERC20 _lpToken,
         IRewarder _rewarder
     ) public onlyOwner {
-        require(poolInfo.length + 1 <= MAX_NUM_OF_POOLS, "SolidusChef::add: > MAX_NUM_OF_POOLS");
+        require(poolInfo.length <= MAX_NUM_OF_POOLS, "SolidusChef::add: > MAX_NUM_OF_POOLS");
         checkPoolDuplicate(_lpToken);
         massUpdatePools();
         totalAllocPoint += allocPoint;
@@ -282,6 +289,7 @@ contract SolidusChef is Ownable {
         poolInfo[_pid].allocPoint = _allocPoint;
         if (overwrite) {
             rewarder[_pid] = _rewarder;
+            emit NewRewarderSet(_rewarder);
         }
         emit LogSetPool(_pid, _allocPoint, overwrite ? _rewarder : rewarder[_pid], overwrite);
     }
@@ -310,6 +318,7 @@ contract SolidusChef is Ownable {
     event Harvest(address indexed user, uint256 indexed pid, uint256 amount);
     event LogPoolAddition(uint256 indexed pid, uint256 allocPoint, IERC20 indexed lpToken, IRewarder indexed rewarder);
     event LogSetPool(uint256 indexed pid, uint256 allocPoint, IRewarder indexed rewarder, bool overwrite);
+    event NewRewarderSet(IRewarder indexed newRewarder);
     event LogUpdatePool(uint256 indexed pid, uint256 lastRewardTime, uint256 lpSupply, uint256 accRewardPerShare);
     event LogRewardPerSecond(uint256 rewardPerSecond);
 }
